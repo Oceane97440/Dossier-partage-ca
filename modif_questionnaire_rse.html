@@ -1,34 +1,30 @@
 <!DOCTYPE html>
 <html lang="fr">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Éditeur de Questionnaire</title>
-    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
-    <link href="https://code.jquery.com/ui/1.13.2/themes/base/jquery-ui.css" rel="stylesheet">
-    <style>
-        .question-card { margin-bottom: 1rem; cursor: move; }
-        .choice-inputs { margin-left: 1.5rem; }
-    </style>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Éditeur de Questionnaire</title>
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet" />
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+  <style>
+    .question-card { margin-bottom: 1rem; }
+    .drag-handle { cursor: move; }
+  </style>
 </head>
 <body>
-<div class="container py-5">
-    <h2>Éditeur de Questionnaire</h2>
-    <div class="mb-3">
-        <label for="questionnaireTitle" class="form-label">Titre du questionnaire</label>
-        <input type="text" id="questionnaireTitle" class="form-control" placeholder="Nom du questionnaire">
-    </div>
-    <div id="questionsContainer"></div>
-    <button class="btn btn-secondary my-3" id="addQuestionBtn">Ajouter une question</button>
-    <button class="btn btn-success" id="saveBtn">Modifier</button>
+<div class="container py-4">
+  <h1 class="mb-4">Éditeur de Questionnaire</h1>
+  <div id="questionnaire"></div>
+  <button class="btn btn-primary mt-3" id="add-question">Ajouter une question</button>
+  <button class="btn btn-success mt-3" id="submit">Modifier</button>
 </div>
 
-<script src="https://code.jquery.com/jquery-3.7.0.min.js"></script>
+<script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
 <script src="https://code.jquery.com/ui/1.13.2/jquery-ui.min.js"></script>
 <script>
+  let questionnaireData = [];
 
-//<?php echo json_encode($phpData); ?>;
-const rawData =  [
+  const rawData =  [
     { id_question: 1, libelle_question: "L'entreprise fait-elle un bilan carbone de ses opérations ?", categorie: "ENVIRONNEMENT", choix: "oui", points: 1 },
     { id_question: 1, libelle_question: "L'entreprise fait-elle un bilan carbone de ses opérations ?", categorie: "ENVIRONNEMENT", choix: "non", points: 0 },
     { id_question: 1, libelle_question: "L'entreprise fait-elle un bilan carbone de ses opérations ?", categorie: "ENVIRONNEMENT", choix: "oui avec suivi d'une trajectoire", points: 2 },
@@ -49,171 +45,171 @@ const rawData =  [
     { id_question: 6, libelle_question: "Pourquoi pas plus engagée RSE ?", categorie: "SOCIAL", choix: "", points: "" },
     { id_question: 7, libelle_question: "Note ECOVADIS (/100)", categorie: "SOCIAL", choix: "", points: "" }
   ];
-// Regroupe les questions par ID
-const groupedQuestions = {};
-rawData.forEach(item => {
-    const qid = item.id_question;
-    if (!groupedQuestions[qid]) {
-        groupedQuestions[qid] = {
-            id_question: qid,
-            rang: item.rang,
-            libelle_question: item.libelle_question,
-            categorie: item.categorie,
-            type: item.choix ? 'choix' : 'texte',
-            choix: []
+
+  function structureData(data) {
+    const grouped = {};
+    data.forEach(item => {
+      if (!grouped[item.id_question]) {
+        grouped[item.id_question] = {
+          id: item.id_question,
+          rang: item.rang ?? item.id_question,
+          libelle: item.libelle_question,
+          categorie: item.categorie,
+          type: item.choix === '' ? 'text' : 'choice',
+          choix: []
         };
-    }
-    if (item.choix) {
-        groupedQuestions[qid].choix.push({
-            text: item.choix,
-            points: item.points
+      }
+      if (item.choix) {
+        grouped[item.id_question].choix.push({ choix: item.choix, points: item.points });
+      }
+    });
+    return Object.values(grouped).sort((a, b) => a.rang - b.rang);
+  }
+
+  function syncFormData() {
+    $('.question-card').each(function (index) {
+      const id = $(this).data('id');
+      questionnaireData[id].rang = index + 1;
+      questionnaireData[id].categorie = $(this).find('.categorie').val();
+      questionnaireData[id].libelle = $(this).find('.libelle').val();
+      const type = $(this).find('.type').val();
+      questionnaireData[id].type = type;
+
+      if (type === 'choice') {
+        questionnaireData[id].choix = [];
+        $(this).find('.choix-list .input-group').each(function () {
+          const choix = $(this).find('.choix-val').val();
+          const points = parseInt($(this).find('.points-val').val()) || 0;
+          questionnaireData[id].choix.push({ choix, points });
         });
-    }
-});
+      }
+    });
+  }
 
-const questions = Object.values(groupedQuestions).sort((a, b) => a.rang - b.rang);
-
-function renderQuestions() {
-    const container = $('#questionsContainer');
+  function render() {
+    const container = $('#questionnaire');
     container.empty();
 
-    questions.forEach((question, index) => {
-        const qIndex = index + 1;
-        const card = $(`
-            <div class="card question-card" data-index="${index}">
-                <div class="card-body">
-                    <div class="d-flex justify-content-between align-items-center mb-2">
-                        <h5>Question <span class="question-rank">${qIndex}</span></h5>
-                        <button class="btn btn-danger btn-sm remove-question">Supprimer</button>
-                    </div>
-                    <div class="mb-2">
-                        <label class="form-label">Catégorie</label>
-                        <input class="form-control category" value="${question.categorie}"/>
-                    </div>
-                    <div class="mb-2">
-                        <label class="form-label">Intitulé</label>
-                        <input class="form-control question-text" value="${question.libelle_question}"/>
-                    </div>
-                    <div class="mb-2">
-                        <label class="form-label">Type de question</label>
-                        <select class="form-select question-type">
-                            <option value="choix" ${question.type === 'choix' ? 'selected' : ''}>Choix</option>
-                            <option value="texte" ${question.type === 'texte' ? 'selected' : ''}>Texte libre</option>
-                        </select>
-                    </div>
-                    <div class="choices-container" style="display: ${question.type === 'choix' ? 'block' : 'none'}">
-                        ${question.choix.map(c => `
-                            <div class="input-group mb-2">
-                                <input type="text" class="form-control choice-text" value="${c.text}" placeholder="Choix"/>
-                                <input type="number" class="form-control choice-point" value="${c.points}" placeholder="Points"/>
-                                <button class="btn btn-outline-danger remove-choice">X</button>
-                            </div>
-                        `).join('')}
-                        <button class="btn btn-outline-primary btn-sm add-choice">Ajouter un choix</button>
-                    </div>
-                </div>
+    questionnaireData.forEach((question, index) => {
+      const card = $(
+        `<div class="card question-card" data-id="${index}">
+          <div class="card-body">
+            <div class="d-flex justify-content-between">
+              <h5 class="card-title">Question <span class="question-number">${question.rang}</span></h5>
+              <span class="drag-handle"><i class="fas fa-bars"></i></span>
             </div>
+            <div class="mb-2">
+              <label>Catégorie</label>
+              <input class="form-control categorie" value="${question.categorie || ''}"/>
+            </div>
+            <div class="mb-2">
+              <label>Libellé de la question</label>
+              <textarea class="form-control libelle">${question.libelle || ''}</textarea>
+            </div>
+            <div class="mb-2">
+              <label>Type de question</label>
+              <select class="form-control type">
+                <option value="choice" ${question.type === 'choice' ? 'selected' : ''}>Choix multiples</option>
+                <option value="text" ${question.type === 'text' ? 'selected' : ''}>Texte libre</option>
+              </select>
+            </div>
+            <div class="choix-container" style="display:${question.type === 'choice' ? 'block' : 'none'}">
+              <div class="choix-list"></div>
+              <button class="btn btn-sm btn-outline-primary add-choix">Ajouter un choix</button>
+            </div>
+            <button class="btn btn-sm btn-danger mt-2 remove-question">Supprimer</button>
+          </div>
+        </div>`
+      );
+
+      const choixList = card.find('.choix-list');
+      question.choix.forEach((c, ci) => {
+        choixList.append(`
+          <div class="input-group mb-1">
+            <input class="form-control choix-val" value="${c.choix}" placeholder="Réponse">
+            <input type="number" class="form-control points-val" value="${c.points}" placeholder="Points">
+            <button class="btn btn-outline-danger remove-choix"><i class="fas fa-times"></i></button>
+          </div>
         `);
+      });
 
-        container.append(card);
+      card.find('.add-choix').click(() => {
+        syncFormData();
+        question.choix.push({ choix: '', points: 0 });
+        render();
+      });
+
+      card.find('.remove-question').click(() => {
+        syncFormData();
+        questionnaireData.splice(index, 1);
+        render();
+      });
+
+      card.find('.type').change(function () {
+        syncFormData();
+        question.type = $(this).val();
+        if (question.type === 'text') question.choix = [];
+        render();
+      });
+
+      container.append(card);
     });
 
-    // Drag and Drop
-    container.sortable({
-        update: function () {
-            const newOrder = [];
-            $('#questionsContainer .question-card').each(function (i) {
-                const index = $(this).data('index');
-                newOrder.push(questions[index]);
-            });
-            questions.splice(0, questions.length, ...newOrder);
-            renderQuestions();
-        }
+    $('.choix-list').on('click', '.remove-choix', function () {
+      const qIndex = $(this).closest('.question-card').data('id');
+      const cIndex = $(this).closest('.input-group').index();
+      questionnaireData[qIndex].choix.splice(cIndex, 1);
+      render();
     });
-}
 
-$(document).on('change', '.question-type', function () {
-    const container = $(this).closest('.card');
-    const type = $(this).val();
-    container.find('.choices-container').toggle(type === 'choix');
-});
+    $('#questionnaire').sortable({
+      handle: '.drag-handle',
+      update: function () {
+        syncFormData();
+        const newData = [];
+        $('.question-card').each(function () {
+          const idx = $(this).data('id');
+          newData.push(questionnaireData[idx]);
+        });
+        questionnaireData = newData.map((q, i) => ({ ...q, rang: i + 1 }));
 
-$(document).on('click', '.add-choice', function () {
-    const group = $(this).before(`
-        <div class="input-group mb-2">
-            <input type="text" class="form-control choice-text" placeholder="Choix"/>
-            <input type="number" class="form-control choice-point" placeholder="Points"/>
-            <button class="btn btn-outline-danger remove-choice">X</button>
-        </div>
-    `);
-});
-
-$(document).on('click', '.remove-choice', function () {
-    $(this).closest('.input-group').remove();
-});
-
-$(document).on('click', '.remove-question', function () {
-    const card = $(this).closest('.card');
-    const index = card.data('index');
-    questions.splice(index, 1);
-    renderQuestions();
-});
-
-$('#addQuestionBtn').on('click', function () {
-    questions.push({
-        id_question: null,
-        rang: questions.length + 1,
-        libelle_question: '',
-        categorie: '',
-        type: 'choix',
-        choix: []
-    });
-    renderQuestions();
-});
-
-$('#saveBtn').on('click', function () {
-    const dataToSend = {
-        titre: $('#questionnaireTitle').val(),
-        questions: []
-    };
-
-    $('#questionsContainer .card').each(function (i) {
-        const q = $(this);
-        const type = q.find('.question-type').val();
-        const choix = [];
-
-        q.find('.choices-container .input-group').each(function () {
-            const text = $(this).find('.choice-text').val();
-            const points = parseInt($(this).find('.choice-point').val());
-            if (text) choix.push({ text, points });
+        $('#questionnaire .question-card').each((i, el) => {
+          $(el).attr('data-id', i);
         });
 
-        dataToSend.questions.push({
-            rang: i + 1,
-            libelle_question: q.find('.question-text').val(),
-            categorie: q.find('.category').val(),
-            type,
-            choix: type === 'choix' ? choix : []
-        });
+        render();
+      }
     });
+  }
 
-    console.log(dataToSend);
+  $('#add-question').click(() => {
+    syncFormData();
+    questionnaireData.push({
+      rang: questionnaireData.length + 1,
+      libelle: '',
+      categorie: '',
+      type: 'choice',
+      choix: []
+    });
+    render();
+  });
 
+  $('#submit').click(() => {
+    syncFormData();
+    console.log('Data à envoyer :', questionnaireData);
     $.ajax({
-        url: 'save_questionnaire.php',
-        method: 'POST',
-        contentType: 'application/json',
-        data: JSON.stringify(dataToSend),
-        success: function (response) {
-            alert('Modifications enregistrées avec succès.');
-        },
-        error: function () {
-            alert("Erreur lors de l'enregistrement.");
-        }
+      url: 'enregistrer_questionnaire.php',
+      type: 'POST',
+      data: { data: JSON.stringify(questionnaireData) },
+      success: res => alert('Modifications enregistrées !'),
+      error: err => alert('Erreur AJAX : ' + err.status)
     });
-});
+  });
 
-renderQuestions();
+  $(document).ready(() => {
+    questionnaireData = structureData(rawData);
+    render();
+  });
 </script>
 </body>
 </html>

@@ -1,0 +1,219 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Éditeur de Questionnaire</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link href="https://code.jquery.com/ui/1.13.2/themes/base/jquery-ui.css" rel="stylesheet">
+    <style>
+        .question-card { margin-bottom: 1rem; cursor: move; }
+        .choice-inputs { margin-left: 1.5rem; }
+    </style>
+</head>
+<body>
+<div class="container py-5">
+    <h2>Éditeur de Questionnaire</h2>
+    <div class="mb-3">
+        <label for="questionnaireTitle" class="form-label">Titre du questionnaire</label>
+        <input type="text" id="questionnaireTitle" class="form-control" placeholder="Nom du questionnaire">
+    </div>
+    <div id="questionsContainer"></div>
+    <button class="btn btn-secondary my-3" id="addQuestionBtn">Ajouter une question</button>
+    <button class="btn btn-success" id="saveBtn">Modifier</button>
+</div>
+
+<script src="https://code.jquery.com/jquery-3.7.0.min.js"></script>
+<script src="https://code.jquery.com/ui/1.13.2/jquery-ui.min.js"></script>
+<script>
+
+//<?php echo json_encode($phpData); ?>;
+const rawData =  [
+    { id_question: 1, libelle_question: "L'entreprise fait-elle un bilan carbone de ses opérations ?", categorie: "ENVIRONNEMENT", choix: "oui", points: 1 },
+    { id_question: 1, libelle_question: "L'entreprise fait-elle un bilan carbone de ses opérations ?", categorie: "ENVIRONNEMENT", choix: "non", points: 0 },
+    { id_question: 1, libelle_question: "L'entreprise fait-elle un bilan carbone de ses opérations ?", categorie: "ENVIRONNEMENT", choix: "oui avec suivi d'une trajectoire", points: 2 },
+    { id_question: 2, libelle_question: "L'entreprise a-t-elle entamé une démarche d'optimisation environnementale...", categorie: "ENVIRONNEMENT", choix: "oui avec suivi d'une trajectoire", points: 3 },
+    { id_question: 2, libelle_question: "L'entreprise a-t-elle entamé une démarche d'optimisation environnementale...", categorie: "ENVIRONNEMENT", choix: "aucune action", points: 0 },
+    { id_question: 2, libelle_question: "L'entreprise a-t-elle entamé une démarche d'optimisation environnementale...", categorie: "ENVIRONNEMENT", choix: "oui quelques actions", points: 1 },
+    { id_question: 2, libelle_question: "L'entreprise a-t-elle entamé une démarche d'optimisation environnementale...", categorie: "ENVIRONNEMENT", choix: "oui plusieurs actions", points: 2 },
+    { id_question: 3, libelle_question: "Plan de continuité chaîne de production ?", categorie: "ENVIRONNEMENT", choix: "oui", points: 3 },
+    { id_question: 3, libelle_question: "Plan de continuité chaîne de production ?", categorie: "ENVIRONNEMENT", choix: "non", points: 0 },
+    { id_question: 3, libelle_question: "Plan de continuité chaîne de production ?", categorie: "ENVIRONNEMENT", choix: "non concernée", points: 1 },
+    { id_question: 4, libelle_question: "Performance RSE fournisseurs ?", categorie: "GOUVERNANCE", choix: "oui", points: 2 },
+    { id_question: 4, libelle_question: "Performance RSE fournisseurs ?", categorie: "GOUVERNANCE", choix: "pour les fournisseurs majeurs", points: 1 },
+    { id_question: 4, libelle_question: "Performance RSE fournisseurs ?", categorie: "GOUVERNANCE", choix: "non", points: 0 },
+    { id_question: 5, libelle_question: "Satisfaction client ?", categorie: "GOUVERNANCE", choix: "aucune action", points: 0 },
+    { id_question: 5, libelle_question: "Satisfaction client ?", categorie: "GOUVERNANCE", choix: "oui quelques actions", points: 1 },
+    { id_question: 5, libelle_question: "Satisfaction client ?", categorie: "GOUVERNANCE", choix: "oui plusieurs actions", points: 2 },
+    { id_question: 5, libelle_question: "Satisfaction client ?", categorie: "GOUVERNANCE", choix: "oui avec mesure de l'efficacité", points: 3 },
+    { id_question: 6, libelle_question: "Pourquoi pas plus engagée RSE ?", categorie: "SOCIAL", choix: "", points: "" },
+    { id_question: 7, libelle_question: "Note ECOVADIS (/100)", categorie: "SOCIAL", choix: "", points: "" }
+  ];
+// Regroupe les questions par ID
+const groupedQuestions = {};
+rawData.forEach(item => {
+    const qid = item.id_question;
+    if (!groupedQuestions[qid]) {
+        groupedQuestions[qid] = {
+            id_question: qid,
+            rang: item.rang,
+            libelle_question: item.libelle_question,
+            categorie: item.categorie,
+            type: item.choix ? 'choix' : 'texte',
+            choix: []
+        };
+    }
+    if (item.choix) {
+        groupedQuestions[qid].choix.push({
+            text: item.choix,
+            points: item.points
+        });
+    }
+});
+
+const questions = Object.values(groupedQuestions).sort((a, b) => a.rang - b.rang);
+
+function renderQuestions() {
+    const container = $('#questionsContainer');
+    container.empty();
+
+    questions.forEach((question, index) => {
+        const qIndex = index + 1;
+        const card = $(`
+            <div class="card question-card" data-index="${index}">
+                <div class="card-body">
+                    <div class="d-flex justify-content-between align-items-center mb-2">
+                        <h5>Question <span class="question-rank">${qIndex}</span></h5>
+                        <button class="btn btn-danger btn-sm remove-question">Supprimer</button>
+                    </div>
+                    <div class="mb-2">
+                        <label class="form-label">Catégorie</label>
+                        <input class="form-control category" value="${question.categorie}"/>
+                    </div>
+                    <div class="mb-2">
+                        <label class="form-label">Intitulé</label>
+                        <input class="form-control question-text" value="${question.libelle_question}"/>
+                    </div>
+                    <div class="mb-2">
+                        <label class="form-label">Type de question</label>
+                        <select class="form-select question-type">
+                            <option value="choix" ${question.type === 'choix' ? 'selected' : ''}>Choix</option>
+                            <option value="texte" ${question.type === 'texte' ? 'selected' : ''}>Texte libre</option>
+                        </select>
+                    </div>
+                    <div class="choices-container" style="display: ${question.type === 'choix' ? 'block' : 'none'}">
+                        ${question.choix.map(c => `
+                            <div class="input-group mb-2">
+                                <input type="text" class="form-control choice-text" value="${c.text}" placeholder="Choix"/>
+                                <input type="number" class="form-control choice-point" value="${c.points}" placeholder="Points"/>
+                                <button class="btn btn-outline-danger remove-choice">X</button>
+                            </div>
+                        `).join('')}
+                        <button class="btn btn-outline-primary btn-sm add-choice">Ajouter un choix</button>
+                    </div>
+                </div>
+            </div>
+        `);
+
+        container.append(card);
+    });
+
+    // Drag and Drop
+    container.sortable({
+        update: function () {
+            const newOrder = [];
+            $('#questionsContainer .question-card').each(function (i) {
+                const index = $(this).data('index');
+                newOrder.push(questions[index]);
+            });
+            questions.splice(0, questions.length, ...newOrder);
+            renderQuestions();
+        }
+    });
+}
+
+$(document).on('change', '.question-type', function () {
+    const container = $(this).closest('.card');
+    const type = $(this).val();
+    container.find('.choices-container').toggle(type === 'choix');
+});
+
+$(document).on('click', '.add-choice', function () {
+    const group = $(this).before(`
+        <div class="input-group mb-2">
+            <input type="text" class="form-control choice-text" placeholder="Choix"/>
+            <input type="number" class="form-control choice-point" placeholder="Points"/>
+            <button class="btn btn-outline-danger remove-choice">X</button>
+        </div>
+    `);
+});
+
+$(document).on('click', '.remove-choice', function () {
+    $(this).closest('.input-group').remove();
+});
+
+$(document).on('click', '.remove-question', function () {
+    const card = $(this).closest('.card');
+    const index = card.data('index');
+    questions.splice(index, 1);
+    renderQuestions();
+});
+
+$('#addQuestionBtn').on('click', function () {
+    questions.push({
+        id_question: null,
+        rang: questions.length + 1,
+        libelle_question: '',
+        categorie: '',
+        type: 'choix',
+        choix: []
+    });
+    renderQuestions();
+});
+
+$('#saveBtn').on('click', function () {
+    const dataToSend = {
+        titre: $('#questionnaireTitle').val(),
+        questions: []
+    };
+
+    $('#questionsContainer .card').each(function (i) {
+        const q = $(this);
+        const type = q.find('.question-type').val();
+        const choix = [];
+
+        q.find('.choices-container .input-group').each(function () {
+            const text = $(this).find('.choice-text').val();
+            const points = parseInt($(this).find('.choice-point').val());
+            if (text) choix.push({ text, points });
+        });
+
+        dataToSend.questions.push({
+            rang: i + 1,
+            libelle_question: q.find('.question-text').val(),
+            categorie: q.find('.category').val(),
+            type,
+            choix: type === 'choix' ? choix : []
+        });
+    });
+
+    console.log(dataToSend);
+
+    $.ajax({
+        url: 'save_questionnaire.php',
+        method: 'POST',
+        contentType: 'application/json',
+        data: JSON.stringify(dataToSend),
+        success: function (response) {
+            alert('Modifications enregistrées avec succès.');
+        },
+        error: function () {
+            alert("Erreur lors de l'enregistrement.");
+        }
+    });
+});
+
+renderQuestions();
+</script>
+</body>
+</html>
